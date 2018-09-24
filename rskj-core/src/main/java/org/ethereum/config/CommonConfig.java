@@ -22,12 +22,12 @@ package org.ethereum.config;
 import co.rsk.config.RskSystemProperties;
 import co.rsk.core.DifficultyCalculator;
 import co.rsk.db.RepositoryImpl;
+import co.rsk.trie.TrieImpl;
 import co.rsk.trie.TrieStoreImpl;
 import org.ethereum.core.Repository;
 import org.ethereum.core.Transaction;
 import org.ethereum.datasource.KeyValueDataSource;
 import org.ethereum.datasource.LevelDbDataSource;
-import org.ethereum.db.TrieStorePoolOnDisk;
 import org.ethereum.util.FileUtil;
 import org.ethereum.validator.*;
 import org.slf4j.Logger;
@@ -41,7 +41,6 @@ import java.util.Collections;
 import java.util.List;
 
 import static java.util.Arrays.asList;
-import static org.ethereum.datasource.DataSourcePool.levelDbByName;
 
 @Configuration
 @ComponentScan(
@@ -63,12 +62,7 @@ public class CommonConfig {
 
     public Repository buildRepository(String databaseDir, int memoryStorageLimit) {
         KeyValueDataSource ds = makeDataSource("state", databaseDir);
-        KeyValueDataSource detailsDS = makeDataSource("details", databaseDir);
-
-        return new RepositoryImpl(new TrieStoreImpl(ds), detailsDS,
-                                  new TrieStorePoolOnDisk(databaseDir),
-                                  memoryStorageLimit
-        );
+        return new RepositoryImpl(new TrieImpl(new TrieStoreImpl(ds),true));
     }
 
     private KeyValueDataSource makeDataSource(String name, String databaseDir) {

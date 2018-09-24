@@ -27,16 +27,12 @@ import co.rsk.config.TestSystemProperties;
 import co.rsk.core.RskAddress;
 import co.rsk.crypto.Keccak256;
 import co.rsk.db.RepositoryImpl;
-import co.rsk.db.TrieStorePoolOnMemory;
 import co.rsk.peg.whitelist.LockWhitelist;
 import co.rsk.peg.whitelist.LockWhitelistEntry;
 import co.rsk.peg.whitelist.OneOffWhiteListEntry;
 import co.rsk.peg.whitelist.UnlimitedWhiteListEntry;
-import co.rsk.trie.TrieStore;
-import co.rsk.trie.TrieStoreImpl;
 import org.apache.commons.lang3.tuple.Pair;
 import org.ethereum.core.Repository;
-import org.ethereum.datasource.HashMapDB;
 import org.ethereum.vm.DataWord;
 import org.ethereum.vm.PrecompiledContracts;
 import org.junit.Assert;
@@ -127,7 +123,7 @@ public class BridgeStorageProviderTest {
 
         RskAddress contractAddress = PrecompiledContracts.BRIDGE_ADDR;
 
-        Assert.assertNotNull(repository.getContractDetails(contractAddress));
+        Assert.assertNotNull(repository.getContractDetails_deprecated(contractAddress));
         Assert.assertNotNull(repository.getStorageBytes(contractAddress, new DataWord("btcTxHashesAP".getBytes())));
         Assert.assertNotNull(repository.getStorageBytes(contractAddress, new DataWord("releaseRequestQueue".getBytes())));
         Assert.assertNotNull(repository.getStorageBytes(contractAddress, new DataWord("releaseTransactionSet".getBytes())));
@@ -816,6 +812,6 @@ public class BridgeStorageProviderTest {
     }
 
     public static RepositoryImpl createRepositoryImpl(RskSystemProperties config) {
-        return new RepositoryImpl(null, new TrieStorePoolOnMemory(), config.detailsInMemoryStorageLimit());
+        return new RepositoryImpl();
     }
 }

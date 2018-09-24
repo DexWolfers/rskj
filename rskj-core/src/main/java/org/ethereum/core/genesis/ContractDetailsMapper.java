@@ -33,10 +33,7 @@ import org.bouncycastle.util.encoders.Hex;
  */
 public class ContractDetailsMapper {
 
-    private final RskSystemProperties config;
-
-    public ContractDetailsMapper(RskSystemProperties config) {
-        this.config = config;
+    public ContractDetailsMapper() {
     }
 
     public ContractDetails mapFromContract(Contract contract) {
@@ -44,10 +41,8 @@ public class ContractDetailsMapper {
 
         contractDetails = new ContractDetailsImpl(
                 null,
-                new TrieImpl(new TrieStoreImpl(new HashMapDB()), true),
-                null,
-                null,
-                config.detailsInMemoryStorageLimit()
+                ContractDetailsImpl.newStorage(),
+                null
         );
 
         if (contract.getCode()!=null) {

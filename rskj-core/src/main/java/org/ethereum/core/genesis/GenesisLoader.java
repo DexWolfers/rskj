@@ -22,6 +22,7 @@ package org.ethereum.core.genesis;
 import co.rsk.config.RskSystemProperties;
 import co.rsk.core.Coin;
 import co.rsk.core.RskAddress;
+import co.rsk.db.RepositoryImpl;
 import co.rsk.trie.Trie;
 import co.rsk.trie.TrieImpl;
 import com.fasterxml.jackson.databind.JavaType;
@@ -30,6 +31,7 @@ import com.google.common.io.ByteStreams;
 import org.apache.commons.lang3.StringUtils;
 import org.ethereum.core.AccountState;
 import org.ethereum.core.Genesis;
+import org.ethereum.core.Repository;
 import org.ethereum.crypto.Keccak256Helper;
 import org.ethereum.db.ContractDetails;
 import org.slf4j.Logger;
@@ -43,12 +45,13 @@ import java.util.Map;
 public class GenesisLoader {
     private static final Logger logger = LoggerFactory.getLogger("genesisloader");
 
-    public static Genesis loadGenesis(RskSystemProperties config, String genesisFile, BigInteger initialNonce, boolean isRsk)  {
+    public static Genesis loadGenesis(RskSystemProperties config, String genesisFile, BigInteger initialNonce, boolean isRsk, boolean isSecure)  {
         InputStream is = GenesisLoader.class.getResourceAsStream("/genesis/" + genesisFile);
-        return loadGenesis(config, initialNonce, is, isRsk);
+        return loadGenesis(config, initialNonce, is, isRsk,true);
     }
 
-    public static Genesis loadGenesis(RskSystemProperties config, BigInteger initialNonce, InputStream genesisJsonIS, boolean isRsk)  {
+    public static Genesis loadGenesis(RskSystemProperties config, BigInteger initialNonce,
+                                      InputStream genesisJsonIS, boolean isRsk,boolean isSecure)  {
         try {
 
             String json = new String(ByteStreams.toByteArray(genesisJsonIS));
@@ -63,7 +66,7 @@ public class GenesisLoader {
             Map<RskAddress, InitialAddressState> premine = generatePreMine(config, initialNonce, genesisJson.getAlloc());
             genesis.setPremine(premine);
 
-            byte[] rootHash = generateRootHash(premine);
+            byte[] rootHash = generateRootHash(premine,isSecure);
             genesis.setStateRoot(rootHash);
 
             genesis.flushRLP();
@@ -82,6 +85,7 @@ public class GenesisLoader {
         ContractDetailsMapper detailsMapper = new ContractDetailsMapper(config);
 
         for (Map.Entry<String, AllocatedAccount> accountEntry : alloc.entrySet()) {
+            // Why contracts starting with "00" are excluded ? Are these precompiled ?
             if(!StringUtils.equals("00", accountEntry.getKey())) {
                 Coin balance = new Coin(new BigInteger(accountEntry.getValue().getBalance()));
                 BigInteger nonce;
@@ -94,18 +98,13 @@ public class GenesisLoader {
 
                 AccountState acctState = new AccountState(nonce, balance);
                 ContractDetails contractDetails = null;
+
+
                 Contract contract = accountEntry.getValue().getContract();
 
                 if (contract != null) {
                     contractDetails = detailsMapper.mapFromContract(contract);
-
-                    if (contractDetails.getCode() != null) {
-                        acctState.setCodeHash(Keccak256Helper.keccak256(contractDetails.getCode()));
-                    }
-
-                    acctState.setStateRoot(contractDetails.getStorageHash());
                 }
-
                 premine.put(new RskAddress(accountEntry.getKey()), new InitialAddressState(acctState, contractDetails));
             }
         }
@@ -113,14 +112,18 @@ public class GenesisLoader {
         return premine;
     }
 
-    private static byte[] generateRootHash(Map<RskAddress, InitialAddressState> premine){
-        Trie state = new TrieImpl(null, true);
+    private static byte[] generateRootHash(Map<RskAddress, InitialAddressState> premine,boolean isSecure){
+        Repository repo = new RepositoryImpl(new TrieImpl(null, isSecure));
 
         for (RskAddress addr : premine.keySet()) {
-            state = state.put(addr.getBytes(), premine.get(addr).getAccountState().getEncoded());
+            InitialAddressState state = premine.get(addr);
+            repo.updateAccountState(addr,state.getAccountState());
+            ContractDetails cd = state.getContractDetails();
+            if (cd!=null)
+                repo.updateContractDetails(addr,cd);
         }
 
-        return state.getHash().getBytes();
+        return repo.getRoot();
     }
 
 }

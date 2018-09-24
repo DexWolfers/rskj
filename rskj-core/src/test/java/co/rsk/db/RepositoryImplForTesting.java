@@ -19,36 +19,17 @@
 package co.rsk.db;
 
 import co.rsk.core.RskAddress;
-import org.ethereum.core.AccountState;
-import org.ethereum.db.ContractDetails;
 import org.ethereum.vm.DataWord;
 
-import static org.ethereum.core.AccountState.EMPTY_DATA_HASH;
-
-/**
- * Created by ajlopez on 08/04/2017.
- */
 public class RepositoryImplForTesting extends RepositoryImpl {
-
-    public RepositoryImplForTesting() {
-        super(null, new TrieStorePoolOnMemory(), 1000);
-    }
 
     @Override
     public synchronized void addStorageRow(RskAddress addr, DataWord key, DataWord value) {
         super.addStorageRow(addr, key, value);
-        AccountState accountState = getAccountState(addr);
-        ContractDetails details = detailsDataStore.get(addr, EMPTY_DATA_HASH);
-        accountState.setStateRoot(details.getStorageHash());
-        updateAccountState(addr, accountState);
     }
 
     @Override
     public synchronized void addStorageBytes(RskAddress addr, DataWord key, byte[] value) {
         super.addStorageBytes(addr, key, value);
-        AccountState accountState = getAccountState(addr);
-        ContractDetails details = detailsDataStore.get(addr, EMPTY_DATA_HASH);
-        accountState.setStateRoot(details.getStorageHash());
-        updateAccountState(addr, accountState);
     }
 }

@@ -20,6 +20,8 @@ package co.rsk.core.bc;
 
 import co.rsk.core.Coin;
 import co.rsk.core.RskAddress;
+import co.rsk.trie.TrieConverter;
+import co.rsk.trie.TrieImpl;
 import org.ethereum.core.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +42,9 @@ import java.util.List;
 public class BlockExecutor {
     private static final Logger logger = LoggerFactory.getLogger("blockexecutor");
 
+    // This is the parent's repository
     private final Repository repository;
+    private  Repository initialRepository;
     private final TransactionExecutorFactory transactionExecutorFactory;
 
     public BlockExecutor(Repository repository, TransactionExecutorFactory transactionExecutorFactory) {
@@ -74,7 +78,12 @@ public class BlockExecutor {
     private void fill(Block block, BlockResult result) {
         block.setTransactionsList(result.getExecutedTransactions());
         BlockHeader header = block.getHeader();
-        header.setTransactionsRoot(Block.getTxTrie(block.getTransactionsList()).getHash().getBytes());
+
+        if (Block.isHardFork9999(block.getNumber())) { // test hardfork
+            header.setTransactionsRoot(Block.getTxTrieNew(block.getTransactionsList()).getHash().getBytes());
+        } else
+            header.setTransactionsRoot(Block.getTxTrieOld(block.getTransactionsList()).getHash().getBytes());
+
         header.setReceiptsRoot(result.getReceiptsRoot());
         header.setGasUsed(result.getGasUsed());
         header.setPaidFees(result.getPaidFees());
@@ -110,8 +119,17 @@ public class BlockExecutor {
             logger.error("Block's execution was interrupted because of an invalid transaction: {} {}.", block.getNumber(), block.getShortHash());
             return false;
         }
+        byte[] computedStateRoot;
 
-        if (!Arrays.equals(result.getStateRoot(), block.getStateRoot()))  {
+        if (Block.isHardFork9999(block.getNumber()))
+            computedStateRoot =result.getStateRoot();
+        else {
+            // Here we need the repository caches to be fully commited
+            // TrieImpl aTrie =(TrieImpl) repository.getMutableTrie().getTrie();
+            // computedStateRoot = TrieConverter.computeOldTrieRoot(aTrie);
+            computedStateRoot =result.getStateRoot();
+        }
+        if (!Arrays.equals(computedStateRoot, block.getStateRoot()))  {
             logger.error("Block's given State Root doesn't match: {} {} {} != {}", block.getNumber(), block.getShortHash(), Hex.toHexString(block.getStateRoot()), Hex.toHexString(result.getStateRoot()));
             return false;
         }
@@ -174,7 +192,23 @@ public class BlockExecutor {
     private BlockResult execute(Block block, byte[] stateRoot, boolean discardInvalidTxs, boolean ignoreReadyToExecute) {
         logger.trace("applyBlock: block: [{}] tx.list: [{}]", block.getNumber(), block.getTransactionsList().size());
 
+        // Forks the repo, does not change "repository". It will have a completely different
+        // image of the repo, where the middle caches are immediately ignored.
+        // In fact, while cloning everything, it asserts that no cache elements remains.
+        // (see assertNoCache())
+        // Which means that you must commit changes and save them to be able to recover
+        // in the next block processed.
+        // Note that creating a snapshot is important when the block is executed twice
+        // (e.g. once while building the block in tests/mining, and the other when trying
+        // to conect the block). This is because the first execution will change the state
+        // of the repository to the state post execution, so it's necessary to get it to
+        // the state prior execution again.
         Repository initialRepository = repository.getSnapshotTo(stateRoot);
+
+        //Repository initialRepository = repository;
+        // Changes the repo
+        //repository.setSnapshotTo(stateRoot);
+
 
         byte[] lastStateRootHash = initialRepository.getRoot();
 
@@ -218,7 +252,7 @@ public class BlockExecutor {
 
             logger.trace("tx executed");
 
-            track.commit();
+            // No need to commit the changes here. track.commit();
 
             logger.trace("track commit");
 
@@ -232,7 +266,7 @@ public class BlockExecutor {
             TransactionReceipt receipt = new TransactionReceipt();
             receipt.setGasUsed(gasUsed);
             receipt.setCumulativeGas(totalGasUsed);
-            lastStateRootHash = initialRepository.getRoot();
+
             receipt.setTxStatus(txExecutor.getReceipt().isSuccessful());
             receipt.setTransaction(tx);
             receipt.setLogInfoList(txExecutor.getVMLogs());
@@ -249,8 +283,18 @@ public class BlockExecutor {
 
             logger.trace("tx done");
         }
+        // This commitment changes the initialRepository's view of the state
+        // This does not affect the parent's (repository) view or state, but it DOES
+        // affect the storage of the parent.
+        track.commit();
 
-        return new BlockResult(executedTransactions, receipts, lastStateRootHash, totalGasUsed, totalPaidFees);
+        // All data saved to disk
+        initialRepository.save();
+
+
+        lastStateRootHash = initialRepository.getRoot();
+        boolean hardfork9999 = Block.isHardFork9999(block.getNumber());
+        return new BlockResult(executedTransactions, receipts, lastStateRootHash, totalGasUsed, totalPaidFees,hardfork9999);
     }
 
     public interface TransactionExecutorFactory {
