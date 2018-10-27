@@ -421,6 +421,7 @@ public class MutableRepository implements Repository {
     @Override
     public synchronized void flush() {
         this.trie.save();
+        this.trie.getTrie().flush();
     }
 
     @Override
