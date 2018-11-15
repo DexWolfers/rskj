@@ -20,11 +20,14 @@ package org.ethereum.vm;
 
 
 import co.rsk.config.RemascConfigFactory;
+import co.rsk.config.RskMiningConstants;
 import co.rsk.config.RskSystemProperties;
+import co.rsk.core.Coin;
 import co.rsk.core.RskAddress;
 import co.rsk.peg.Bridge;
 import co.rsk.peg.SamplePrecompiledContract;
 import co.rsk.remasc.RemascContract;
+import org.apache.commons.lang3.ArrayUtils;
 import org.ethereum.config.BlockchainConfig;
 import org.ethereum.core.Block;
 import org.ethereum.core.Repository;
@@ -37,10 +40,10 @@ import org.ethereum.util.BIUtil;
 import org.ethereum.util.ByteUtil;
 
 import java.math.BigInteger;
-import java.util.List;
+import java.util.*;
+import java.util.function.Function;
 
 import static org.ethereum.util.ByteUtil.*;
-
 
 
 /**
@@ -57,11 +60,13 @@ public class PrecompiledContracts {
     public static final String SAMPLE_ADDR_STR = "0000000000000000000000000000000001000005";
     public static final String BRIDGE_ADDR_STR = "0000000000000000000000000000000001000006";
     public static final String REMASC_ADDR_STR = "0000000000000000000000000000000001000008";
+    public static final String BLOCK_HEADER_ADDR_STR = "0000000000000000000000000000000001000009";
 
     public static final RskAddress BRIDGE_ADDR = new RskAddress(BRIDGE_ADDR_STR);
     public static final RskAddress IDENTITY_ADDR = new RskAddress(IDENTITY_ADDR_STR);
     public static final RskAddress REMASC_ADDR = new RskAddress(REMASC_ADDR_STR);
     public static final RskAddress SAMPLE_ADDR = new RskAddress(SAMPLE_ADDR_STR);
+    public static final RskAddress BLOCK_HEADER_ADDR = new RskAddress(BLOCK_HEADER_ADDR_STR);
 
     private static final String RSK_NATIVECONTRACT_REQUIREDPREFIX = "000000000000000000000000";
     private static ECRecover ecRecover = new ECRecover();
@@ -70,6 +75,7 @@ public class PrecompiledContracts {
     private static Identity identity = new Identity();
     private static SamplePrecompiledContract sample = new SamplePrecompiledContract(SAMPLE_ADDR);
     private static BigIntegerModexp bigIntegerModexp = new BigIntegerModexp();
+    private static BlockHeaderContract blockHeaderContract = new BlockHeaderContract();
 
     private final RskSystemProperties config;
 
@@ -94,6 +100,9 @@ public class PrecompiledContracts {
         if (address.isHex(RSK_NATIVECONTRACT_REQUIREDPREFIX + IDENTITY_ADDR_STR)) {
             return identity;
         }
+        if (address.isHex(RSK_NATIVECONTRACT_REQUIREDPREFIX + BLOCK_HEADER_ADDR)) {
+            return blockHeaderContract;
+        }
         // RSKIP-93 removes this contract completely
         if (address.isHex(RSK_NATIVECONTRACT_REQUIREDPREFIX + SAMPLE_ADDR_STR) && !blockchainConfig.isRskip93()) {
             return sample;
@@ -116,7 +125,8 @@ public class PrecompiledContracts {
 
         public abstract long getGasForData(byte[] data);
 
-        public void init(Transaction tx, Block executionBlock, Repository repository, BlockStore blockStore, ReceiptStore receiptStore, List<LogInfo> logs) {}
+        public void init(Transaction tx, Block executionBlock, Repository repository, BlockStore blockStore, ReceiptStore receiptStore, List<LogInfo> logs) {
+        }
 
         public abstract byte[] execute(byte[] data);
     }
@@ -189,8 +199,7 @@ public class PrecompiledContracts {
             byte[] result = null;
             if (data == null) {
                 result = HashUtil.ripemd160(ByteUtil.EMPTY_BYTE_ARRAY);
-            }
-            else {
+            } else {
                 result = HashUtil.ripemd160(data);
             }
 
@@ -252,12 +261,12 @@ public class PrecompiledContracts {
 
     /**
      * Computes modular exponentiation on big numbers
-     *
+     * <p>
      * format of data[] array:
      * [length_of_BASE] [length_of_EXPONENT] [length_of_MODULUS] [BASE] [EXPONENT] [MODULUS]
      * where every length is a 32-byte left-padded integer representing the number of bytes.
      * Call data is assumed to be infinitely right-padded with zero bytes.
-     *
+     * <p>
      * Returns an output as a byte array with the same length as the modulus
      */
     public static class BigIntegerModexp extends PrecompiledContract {
@@ -272,7 +281,7 @@ public class PrecompiledContracts {
 
         @Override
         public long getGasForData(byte[] data) {
-            byte[] safeData = data==null?EMPTY_BYTE_ARRAY:data;
+            byte[] safeData = data == null ? EMPTY_BYTE_ARRAY : data;
 
             int baseLen = parseLen(safeData, BASE);
             int expLen = parseLen(safeData, EXPONENT);
@@ -284,8 +293,7 @@ public class PrecompiledContracts {
             try {
                 int offset = Math.addExact(ARGS_OFFSET, baseLen);
                 expHighBytes = parseBytes(safeData, offset, Math.min(expLen, 32));
-            }
-            catch (ArithmeticException e) {
+            } catch (ArithmeticException e) {
                 expHighBytes = ByteUtil.EMPTY_BYTE_ARRAY;
             }
 
@@ -375,4 +383,4 @@ public class PrecompiledContracts {
 
     }
 
-}
+   }
