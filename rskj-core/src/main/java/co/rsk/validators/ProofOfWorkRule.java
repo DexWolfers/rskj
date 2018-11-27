@@ -79,15 +79,12 @@ public class ProofOfWorkRule implements BlockHeaderValidationRule, BlockValidati
         return isValid(block.getHeader());
     }
 
-    public static boolean isFallbackMiningPossible(RskSystemProperties config, BlockHeader header) {
+    private boolean isFallbackMiningPossible(RskSystemProperties config, BlockHeader header) {
         if (config.getBlockchainConfig().getConfigForBlock(header.getNumber()).isRskip98()) {
             return false;
         }
 
         Constants constants = config.getBlockchainConfig().getCommonConstants();
-        if (header.getNumber() >= constants.getEndOfFallbackMiningBlockNumber()) {
-            return false;
-        }
 
         if (header.getDifficulty().compareTo(constants.getFallbackMiningDifficulty()) > 0) {
             return false;
@@ -100,7 +97,7 @@ public class ProofOfWorkRule implements BlockHeaderValidationRule, BlockValidati
         return true;
     }
 
-    public boolean isFallbackMiningPossibleAndBlockSigned(BlockHeader header) {
+    private boolean isFallbackMiningPossibleAndBlockSigned(BlockHeader header) {
 
         if (header.getBitcoinMergedMiningCoinbaseTransaction() != null) {
             return false;
