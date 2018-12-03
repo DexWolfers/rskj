@@ -19,11 +19,9 @@
 
 package org.ethereum.core.genesis;
 
-import co.rsk.config.RskSystemProperties;
 import co.rsk.core.Coin;
 import co.rsk.core.RskAddress;
 import co.rsk.db.RepositoryImpl;
-import co.rsk.trie.Trie;
 import co.rsk.trie.TrieImpl;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,7 +30,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.ethereum.core.AccountState;
 import org.ethereum.core.Genesis;
 import org.ethereum.core.Repository;
-import org.ethereum.crypto.Keccak256Helper;
 import org.ethereum.db.ContractDetails;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,13 +42,13 @@ import java.util.Map;
 public class GenesisLoader {
     private static final Logger logger = LoggerFactory.getLogger("genesisloader");
 
-    public static Genesis loadGenesis(RskSystemProperties config, String genesisFile, BigInteger initialNonce, boolean isRsk, boolean isSecure)  {
+    public static Genesis loadGenesis(String genesisFile, BigInteger initialNonce, boolean isRsk, boolean isSecure)  {
         InputStream is = GenesisLoader.class.getResourceAsStream("/genesis/" + genesisFile);
-        return loadGenesis(config, initialNonce, is, isRsk,true);
+        return loadGenesis(initialNonce, is, isRsk,true);
     }
 
-    public static Genesis loadGenesis(RskSystemProperties config, BigInteger initialNonce,
-                                      InputStream genesisJsonIS, boolean isRsk,boolean isSecure)  {
+    public static Genesis loadGenesis(BigInteger initialNonce,
+                                      InputStream genesisJsonIS, boolean isRsk, boolean isSecure)  {
         try {
 
             String json = new String(ByteStreams.toByteArray(genesisJsonIS));
@@ -63,7 +60,7 @@ public class GenesisLoader {
 
             Genesis genesis = new GenesisMapper().mapFromJson(genesisJson, isRsk);
 
-            Map<RskAddress, InitialAddressState> premine = generatePreMine(config, initialNonce, genesisJson.getAlloc());
+            Map<RskAddress, InitialAddressState> premine = generatePreMine(initialNonce, genesisJson.getAlloc());
             genesis.setPremine(premine);
 
             byte[] rootHash = generateRootHash(premine,isSecure);
@@ -80,9 +77,9 @@ public class GenesisLoader {
         }
     }
 
-    private static Map<RskAddress, InitialAddressState> generatePreMine(RskSystemProperties config, BigInteger initialNonce, Map<String, AllocatedAccount> alloc){
+    private static Map<RskAddress, InitialAddressState> generatePreMine(BigInteger initialNonce, Map<String, AllocatedAccount> alloc){
         Map<RskAddress, InitialAddressState> premine = new HashMap<>();
-        ContractDetailsMapper detailsMapper = new ContractDetailsMapper(config);
+        ContractDetailsMapper detailsMapper = new ContractDetailsMapper();
 
         for (Map.Entry<String, AllocatedAccount> accountEntry : alloc.entrySet()) {
             // Why contracts starting with "00" are excluded ? Are these precompiled ?

@@ -951,7 +951,7 @@ public class BlockChainImplTest {
     public static Block getGenesisBlock(BlockChainImpl blockChain) {
         Repository repository = blockChain.getRepository();
 
-        Genesis genesis = GenesisLoader.loadGenesis(config, "rsk-unittests.json",
+        Genesis genesis = GenesisLoader.loadGenesis("rsk-unittests.json",
                 BigInteger.ZERO, true,true);
 
         for (RskAddress addr : genesis.getPremine().keySet()) {

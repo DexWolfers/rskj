@@ -124,7 +124,7 @@ public class BlockChainLoader {
 
             // loadGenesis() precomputes the state root (applies all premined changes)
             // but then this is recomputed here. another waste.
-            Genesis genesis = GenesisLoader.loadGenesis(config, config.genesisInfo(), initialNonce, true,true);
+            Genesis genesis = GenesisLoader.loadGenesis(config.genesisInfo(), initialNonce, true,true);
             for (RskAddress addr : genesis.getPremine().keySet()) {
                 repository.createAccount(addr);
                 InitialAddressState initialAddressState = genesis.getPremine().get(addr);
