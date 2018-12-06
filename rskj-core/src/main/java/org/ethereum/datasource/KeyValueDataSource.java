@@ -19,24 +19,41 @@
 
 package org.ethereum.datasource;
 
+import org.ethereum.db.ByteArrayWrapper;
+
 import java.util.Map;
 import java.util.Set;
 
-/**
- * @author Roman Mandeleil
- * @since 18.01.2015
- */
 public interface KeyValueDataSource extends DataSource {
 
     byte[] get(byte[] key);
 
+    /**
+     * Empty puts are allowed and interpreted as deletions
+     * because empty arrays do not delete items.
+     * null puts() are NOT allowed.
+     */
     byte[] put(byte[] key, byte[] value);
 
     void delete(byte[] key);
 
     Set<byte[]> keys();
 
-    void updateBatch(Map<byte[], byte[]> rows);
+    /**
+     * Null datums are not allowed.
+     * Empty datums are re-interpreted as deletions
+     * this is because in levelDb empty arrays do not remove the item in databases
+     * Note that updateBatch() does not imply the operation is atomic:
+     * if somethings bracks, it's possible that some keys get written and some
+     * others don't.
+     * @param rows
+     */
+    void updateBatch(Map<ByteArrayWrapper, byte[]> rows);
+
+    /**
+     * This makes things go to disk. To enable caching.
+     */
+    void flush();
 
     default void copyFrom(KeyValueDataSource ds) {
         for (byte[] key : ds.keys()) {

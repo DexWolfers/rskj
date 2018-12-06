@@ -462,6 +462,18 @@ public class TrieImpl implements Trie {
     }
 
     /**
+     * sends all data to disk. This applies to the store and all keys saved into the
+     * store, not only to this node.
+     */
+    @Override
+    public void flush() {
+        if (this.store==null) {
+            return;
+        }
+        this.store.flush();
+    }
+
+    /**
      * save saves the unsaved current trie and subnodes to their associated store
      *
      */

@@ -19,6 +19,7 @@
 
 package org.ethereum.datasource;
 
+import co.rsk.util.MaxSizeHashMap;
 import org.ethereum.db.ByteArrayWrapper;
 import org.iq80.leveldb.DBException;
 
@@ -30,8 +31,34 @@ import static org.ethereum.util.ByteUtil.wrap;
 
 public class HashMapDB implements KeyValueDataSource {
 
-    private final Map<ByteArrayWrapper, byte[]> storage = new ConcurrentHashMap<>();
+    private Map<ByteArrayWrapper, byte[]> storage;
     private boolean clearOnClose = true;
+
+    public HashMapDB() {
+        this(new ConcurrentHashMap<>());
+    }
+
+    public HashMapDB(Map<ByteArrayWrapper, byte[]> astorage) {
+        storage = astorage;
+    }
+
+    // Create a cache with removal policy
+    // In the future we could use total user RAM instead of a number of elements
+
+    public HashMapDB(int maxSize, boolean accessOrder) {
+        // We could use Collections.synchronizedMap() to archieve the concurrency
+        // properties, although it won't be optimized for concurrent reads as desired.
+        // Anyway the full node should be optimized for blockchain synchronization
+        // and not so much for RPC handling, to the synchronizedMap seems appropiate
+        // This projects https://github.com/ben-manes/concurrentlinkedhashmap/tree/master/src
+        // seems to provide a map with the desired properties.
+
+        this(Collections.synchronizedMap(new MaxSizeHashMap(maxSize,accessOrder)));
+    }
+
+    public Map<ByteArrayWrapper, byte[]> getStorageMap() {
+        return storage;
+    }
 
     @Override
     public void delete(byte[] arg0) throws DBException {
@@ -52,7 +79,7 @@ public class HashMapDB implements KeyValueDataSource {
 
     @Override
     public void init() {
-
+        clear();
     }
 
     @Override
@@ -67,15 +94,42 @@ public class HashMapDB implements KeyValueDataSource {
 
     @Override
     public synchronized Set<byte[]> keys() {
-        return storage.keySet().stream()
-                .map(ByteArrayWrapper::getData)
-                .collect(Collectors.toSet());
+        return storage.keySet().stream().map(ByteArrayWrapper::getData).collect(Collectors.toSet());
+    }
+
+    public synchronized void removeBatch(Map<ByteArrayWrapper, byte[]> rows) {
+        for (Map.Entry<ByteArrayWrapper, byte[]> entry : rows.entrySet()) {
+            ByteArrayWrapper key = entry.getKey();
+            byte[] keyBytes = key.getData();
+            // Make this check explicit so that users know very clearly what to expect
+            Objects.requireNonNull(keyBytes);
+            delete(keyBytes);
+        }
+    }
+
+    // Assumes elements are not present. Do not delete.
+    public synchronized void addBatch(Map<ByteArrayWrapper, byte[]> rows) {
+        storage.putAll(rows);
     }
 
     @Override
-    public synchronized void updateBatch(Map<byte[], byte[]> rows) {
-        rows.entrySet().stream().
-                forEach(entry -> storage.put(wrap(entry.getKey()), entry.getValue()));
+    public synchronized void updateBatch(Map<ByteArrayWrapper, byte[]> rows) {
+        // Hashmap does not handle null values. If there are empty values, remove them
+        for (Map.Entry<ByteArrayWrapper, byte[]> entry : rows.entrySet()) {
+            ByteArrayWrapper key = entry.getKey();
+            byte[] value = entry.getValue();
+            byte[] keyBytes = key.getData();
+
+            // Make this check explicit so that users know very clearly what to expect
+            if (Objects.isNull(keyBytes) || Objects.isNull(value)) {
+                throw new NullPointerException();
+            }
+            if (keyBytes.length != 0) {
+                put(keyBytes , value);
+            } else {
+                delete(keyBytes );
+            }
+        }
     }
 
     public synchronized HashMapDB setClearOnClose(boolean clearOnClose) {
@@ -83,10 +137,19 @@ public class HashMapDB implements KeyValueDataSource {
         return this;
     }
 
+    public void clear() {
+        this.storage.clear();
+    }
+
     @Override
     public synchronized void close() {
         if (clearOnClose) {
             this.storage.clear();
         }
+    }
+
+    @Override
+    public void flush(){
+        // HashMapDB has no flush: everything is kept in memory.
     }
 }

@@ -20,6 +20,7 @@
 package org.ethereum.datasource;
 
 import co.rsk.panic.PanicProcessor;
+import org.ethereum.db.ByteArrayWrapper;
 import org.iq80.leveldb.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +33,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -182,15 +184,23 @@ public class LevelDbDataSource implements KeyValueDataSource {
 
     @Override
     public byte[] put(byte[] key, byte[] value) {
+        if (key == null || value == null) {
+            throw new NullPointerException();
+        }
+
+        if (value.length==0) {
+            delete(key);
+            return value;
+        }
         resetDbLock.readLock().lock();
         try {
             if (logger.isTraceEnabled()) {
-                logger.trace("~> LevelDbDataSource.put(): {}, key: {}, return length: {}", name, Hex.toHexString(key), (value == null ? "null" : value.length);
+                logger.trace("~> LevelDbDataSource.put(): {}, key: {}, return length: {}", name, Hex.toHexString(key), value.length);
             }
 
             db.put(key, value);
             if (logger.isTraceEnabled()) {
-                logger.trace("<~ LevelDbDataSource.put(): {}, key: {}, return length: {}", name, Hex.toHexString(key), (value == null ? "null" : value.length));
+                logger.trace("<~ LevelDbDataSource.put(): {}, key: {}, return length: {}", name, Hex.toHexString(key), value.length);
             }
 
             return value;
@@ -245,17 +255,29 @@ public class LevelDbDataSource implements KeyValueDataSource {
         }
     }
 
-    private void updateBatchInternal(Map<byte[], byte[]> rows) throws IOException {
+    private void updateBatchInternal(Map<ByteArrayWrapper, byte[]> rows) throws IOException {
+        // Note that this is not atomic.
         try (WriteBatch batch = db.createWriteBatch()) {
-            for (Map.Entry<byte[], byte[]> entry : rows.entrySet()) {
-                batch.put(entry.getKey(), entry.getValue());
+            for (Map.Entry<ByteArrayWrapper, byte[]> entry : rows.entrySet()) {
+
+                byte[] key = entry.getKey().getData();
+                byte[] value =entry.getValue();
+                // Make this check explicit so that users know very clearly what to expect
+                if (Objects.isNull(key) || Objects.isNull(value)) {
+                    throw new NullPointerException();
+                }
+                if (key.length!=0) {
+                    batch.put(key, value);
+                } else {
+                    db.delete(key);
+                }
             }
             db.write(batch);
         }
     }
 
     @Override
-    public void updateBatch(Map<byte[], byte[]> rows) {
+    public void updateBatch(Map<ByteArrayWrapper, byte[]> rows) {
         resetDbLock.readLock().lock();
         try {
             if (logger.isTraceEnabled()) {
@@ -308,5 +330,10 @@ public class LevelDbDataSource implements KeyValueDataSource {
         } finally {
             resetDbLock.writeLock().unlock();
         }
+    }
+
+    @Override
+    public void flush(){
+        // All is flushed immediately: there is no uncommittedCache to flush
     }
 }

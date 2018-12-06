@@ -42,6 +42,8 @@ public interface Trie {
 
     void save();
 
+    void flush();
+
     void copyTo(TrieStore target);
 
     int trieSize();

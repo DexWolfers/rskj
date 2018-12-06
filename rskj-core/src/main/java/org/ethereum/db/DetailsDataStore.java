@@ -136,7 +136,7 @@ public class DetailsDataStore {
     private long flushInternal() {
         long totalSize = 0;
 
-        Map<byte[], byte[]> batch = new HashMap<>();
+        Map<ByteArrayWrapper, byte[]> batch = new HashMap<>();
         for (Map.Entry<RskAddress, ContractDetails> entry : cache.entrySet()) {
             ContractDetails details = entry.getValue();
             details.syncStorage();
@@ -145,7 +145,7 @@ public class DetailsDataStore {
 
             byte[] value = details.getEncoded();
 
-            batch.put(key, value);
+            batch.put(new ByteArrayWrapper(key), value);
             totalSize += value.length;
         }
 
