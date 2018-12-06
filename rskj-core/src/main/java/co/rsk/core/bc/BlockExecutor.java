@@ -20,6 +20,8 @@ package co.rsk.core.bc;
 
 import co.rsk.core.Coin;
 import co.rsk.core.RskAddress;
+import co.rsk.trie.MutableTrie;
+import co.rsk.trie.Trie;
 import co.rsk.trie.TrieConverter;
 import co.rsk.trie.TrieImpl;
 import org.ethereum.core.*;
@@ -205,11 +207,6 @@ public class BlockExecutor {
         // the state prior execution again.
         Repository initialRepository = repository.getSnapshotTo(stateRoot);
 
-        //Repository initialRepository = repository;
-        // Changes the repo
-        //repository.setSnapshotTo(stateRoot);
-
-
         byte[] lastStateRootHash = initialRepository.getRoot();
 
         Repository track = initialRepository.startTracking();
@@ -294,8 +291,19 @@ public class BlockExecutor {
 
         lastStateRootHash = initialRepository.getRoot();
         boolean hardfork9999 = Block.isHardFork9999(block.getNumber());
+        MutableTrie amTrie = initialRepository.getMutableTrie();
+
+        // We release any pointer to unused tries/repositories. We do not need them.
+        // The BlockResult() holds a reference to the trie for optimized access, but if
+        // BlockResult is diposed, there won't be any active trie in memory.
+        initialRepository = null;
+
+        // in some test mocks, amTrie is null
+        Trie aTrie =null;
+        if (amTrie!=null)
+            aTrie = amTrie.getTrie();
         return new BlockResult(executedTransactions, receipts, lastStateRootHash,
-                initialRepository.getMutableTrie().getTrie(),
+                aTrie,
                 totalGasUsed, totalPaidFees,hardfork9999);
     }
 
