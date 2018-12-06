@@ -26,6 +26,7 @@ import co.rsk.trie.TrieImpl;
 import co.rsk.trie.TrieStoreImpl;
 import org.ethereum.core.Repository;
 import org.ethereum.core.Transaction;
+import org.ethereum.datasource.DataSourceWithCache;
 import org.ethereum.datasource.KeyValueDataSource;
 import org.ethereum.datasource.LevelDbDataSource;
 import org.ethereum.util.FileUtil;
@@ -41,6 +42,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static java.util.Arrays.asList;
+import static java.util.Arrays.parallelSetAll;
 
 @Configuration
 @ComponentScan(
@@ -57,12 +59,23 @@ public class CommonConfig {
             FileUtil.recursiveDelete(databaseDir);
             logger.info("Database reset done");
         }
-        return buildRepository(databaseDir, config.detailsInMemoryStorageLimit());
+        return buildRepository(databaseDir, config.detailsInMemoryStorageLimit(),config.useStateCache(),config.stateCacheSize());
     }
 
-    public Repository buildRepository(String databaseDir, int memoryStorageLimit) {
-        KeyValueDataSource ds = makeDataSource("state", databaseDir);
-        return new RepositoryImpl(new TrieImpl(new TrieStoreImpl(ds),true));
+
+    public Repository buildRepository(String databaseDir, int memoryStorageLimit,
+                                      boolean useStateCache,int stateCacheSize) {
+
+        KeyValueDataSource ds = makeDataSource( "state",databaseDir);
+        KeyValueDataSource dscache;
+
+        if (useStateCache) {
+            dscache = new DataSourceWithCache(ds,stateCacheSize);
+        }
+          else
+            dscache = ds;
+
+        return new RepositoryImpl(new TrieImpl(new TrieStoreImpl(dscache),true));
     }
 
     private KeyValueDataSource makeDataSource(String name, String databaseDir) {
